@@ -31,9 +31,17 @@
 //       Input:  8-byte keyboard report — [modifiers][reserved][key0..key5]
 //       Output: 1-byte LED report      — NumLock / CapsLock / ScrollLock / ...
 //
+//       Keyboard report layout (8 bytes):
+//           Byte 0: Modifier bitmask  (Ctrl / Shift / Alt / GUI × Left / Right)
+//           Byte 1: Reserved (always 0x00)
+//           Bytes 2–7: Up to 6 simultaneous keycodes (6KRO)
+//
 //   _hidConsumerCollection  (Report ID 0x02) — input only
 //       Input:  2-byte consumer report — 16-bit usage ID, little-endian
 //
+//       Consumer report layout (2 bytes):
+//           16-bit usage ID, little-endian. 0x0000 = all released.
+// 
 // Splitting the map allows a device to drop the keyboard collection
 // (e.g. a media-only remote) or the consumer collection (a pure keyboard)
 // without any change to the report IDs of the other.
@@ -72,6 +80,8 @@ static const uint8_t _hidKeyboardCollection[] = {
     0x91, 0x01,        //   Output (Constant) — padding to complete the byte
 
     // 6-key rollover keycode array
+    // Logical Maximum 0xE7 covers all standard keys including international
+    // and language keys up to KEY_RGUI.
     0x95, 0x06,        //   Report Count (6)
     0x75, 0x08,        //   Report Size (8 bits)
     0x15, 0x00,        //   Logical Minimum (0)
@@ -86,6 +96,8 @@ static const uint8_t _hidKeyboardCollection[] = {
 
 static const uint8_t _hidConsumerCollection[] = {
     // ── Consumer Control (Report ID 0x02) ─────────────────────────────
+    // Logical Maximum 0x3FF covers all MEDIA_* values defined in
+    // BLEHIDMediaKeys.h without any descriptor change.
     0x05, 0x0C,        // Usage Page (Consumer)
     0x09, 0x01,        // Usage (Consumer Control)
     0xA1, 0x01,        // Collection (Application)
