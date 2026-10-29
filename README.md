@@ -111,6 +111,7 @@ void loop() {
 * [Media / Consumer Keys](#media--consumer-keys)
 * [Timing](#timing)
 * [Battery Level](#battery-level)
+* [Appearance](#appearance)
 * [Security / Pairing](#security--pairing)
 * [Power Saving](#power-saving)
   * [TX Power](#tx-power)
@@ -143,6 +144,8 @@ HijelHID_BLEKeyboard keyboard("My Keyboard", "My Company", 100);
 | `deviceName` | Name shown to the host when pairing. Max 29 chars. | `"HijelHID KB"` |
 | `manufacturer` | Manufacturer name. Max 512 chars. | `"Hijel"` |
 | `batteryLevel` | Starting battery level (1–100). | `100` |
+
+To change how the device is *categorised* by the host (keyboard vs. presentation remote vs. touchpad, etc.), see [Appearance](#appearance). The device name and manufacturer here only control what the device is *called*.
 
 [[Top]](#api-reference)
 
@@ -376,6 +379,43 @@ Update the battery percentage shown to the host at any time.
 ```.ino
 keyboard.setBatteryLevel(85);  // Report 85% battery
 ```
+
+[[Top]](#api-reference)
+
+---
+
+<br>
+
+## <a name="appearance"></a>Appearance
+
+The GAP Appearance value tells the host what kind of device this is *before* it connects — it's shown in Bluetooth settings, "Add device" dialogs, and the OS device list. Default is `APPEARANCE_HID_KEYBOARD` (0x03C1).
+
+Call `setAppearance()` **before** `begin()`. Pass any `APPEARANCE_*` constant from `src/BLEHIDAppearance.h`.
+
+```.ino
+// Default — appears as a keyboard
+HijelHID_BLEKeyboard keyboard;
+keyboard.begin();
+
+// Presentation clicker — appears with a presenter icon on the host
+HijelHID_BLEKeyboard keyboard("Clicker", "Hijel", 100);
+keyboard.setAppearance(APPEARANCE_HID_PRESENTATION_REMOTE);
+keyboard.begin();
+
+// Touchpad-style device
+keyboard.setAppearance(APPEARANCE_HID_TOUCHPAD);
+
+// Generic HID — let the host infer from the report map
+keyboard.setAppearance(APPEARANCE_HID);
+```
+
+The full table (`BLEHIDAppearance.h`) covers every category and subcategory defined by the Bluetooth SIG — phones, computers, watches, sensors, light fixtures, cookware, etc. Non-HID values are permitted but will make the host categorise the device as something other than a keyboard — the HID service is still present and functional, so typing still works.
+
+> [!NOTE]
+> Calling setAppearance() while the stack is running logs a warning. The new value is applied on the next end() + begin() cycle.
+
+> [!NOTE]
+> Hosts cache the appearance value from the first successful pairing. To change the icon/type shown in the OS, unpair on the host side, call `keyboard.clearBonds()`, and re-pair.
 
 [[Top]](#api-reference)
 

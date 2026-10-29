@@ -42,6 +42,7 @@
 #include <string>
 #include "BLEHIDKeys.h"
 #include "BLEHIDMediaKeys.h"
+#include "BLEHIDAppearance.h"
 
 // ─── Report IDs ────────────────────────────────────────────────────────────
 #define HID_REPORT_ID_KEYBOARD  0x01
@@ -383,6 +384,28 @@ public:
      */
     void setTxPower(uint8_t level);
 
+    // ─── Appearance (GAP Advertisement) ──────────────────────────────────
+
+    /**
+     * Set the GAP Appearance value advertised by the device.
+     *
+     * The appearance tells the host what kind of device this is *before*
+     * it connects (it's in the advertising payload / scan response).
+     * It appears in Bluetooth settings, "Add device" dialogs, etc.
+     *
+     * Default: `APPEARANCE_HID_KEYBOARD` (0x03C1).
+     *
+     * Pass any `APPEARANCE_*` constant from `BLEHIDAppearance.h`.
+     *
+     * Non-HID values (e.g. `APPEARANCE_MEDIA_PLAYER`) are permitted but
+     * will make the host categorise the device as something other than a
+     * keyboard — the HID service is still present and functional.
+     *
+     * Must be called before `begin()`, or between `end()` and `begin()` for
+     * the new value to take effect.
+     */
+    void setAppearance(uint16_t appearance);
+
     // ─── Key Input (keyboard and consumer/media) ─────────────────────────
     //
     // press() / release() / releaseAll() / tap() handle both keyboard keys
@@ -587,6 +610,7 @@ private:
     std::string         _deviceName;
     std::string         _manufacturer;
     uint8_t             _batteryLevel;
+    uint16_t            _appearance;
     BLEKeyboardSecurity _secMode;
     uint16_t            _tapDelay;
     uint16_t            _keyGap;

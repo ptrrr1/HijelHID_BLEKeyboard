@@ -266,6 +266,7 @@ HijelHID_BLEKeyboard::HijelHID_BLEKeyboard(const char* deviceName,
                                             const char* manufacturer,
                                             uint8_t     batteryLevel)
     : _batteryLevel(100),
+      _appearance(APPEARANCE_HID_KEYBOARD),
       _secMode(BLEKeyboardSecurity::JustWorks),
       _tapDelay(HID_DEFAULT_TAP_DELAY_MS),
       _keyGap(HID_DEFAULT_KEY_GAP_MS),
@@ -414,10 +415,11 @@ void HijelHID_BLEKeyboard::begin() {
         }
         // Re-apply TX power — not persisted across end()/begin() cycles.
         setTxPower(_txPowerLevel);
+        NimBLEDevice::getAdvertising()->setAppearance(_appearance);
         NimBLEDevice::startAdvertising();
         _state = _BLEState::Running;
-        _logNf("Advertising as \"%s\". Tap delay: %dms, key gap: %dms.",
-               _deviceName.c_str(), _tapDelay, _keyGap);
+        _logNf("Advertising as \"%s\". Appearance: 0x%04X. Tap delay: %dms, key gap: %dms.",
+           _deviceName.c_str(), _appearance,  _tapDelay, _keyGap);
         return;
     }
 
@@ -524,7 +526,7 @@ void HijelHID_BLEKeyboard::begin() {
     // Configure and start advertising
     _logN("Configuring advertising...");
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
-    pAdv->setAppearance(0x03C1);  // HID Keyboard appearance
+    pAdv->setAppearance(_appearance);
     pAdv->addServiceUUID(_pHID->getHidService()->getUUID());
     pAdv->addServiceUUID(_pHID->getBatteryService()->getUUID());
     pAdv->setPreferredParams(0x10, 0x20);  // 20ms min, 40ms max (Android 11 compatible)
@@ -540,8 +542,8 @@ void HijelHID_BLEKeyboard::begin() {
 
     NimBLEDevice::startAdvertising();
     _state = _BLEState::Running;
-    _logNf("Advertising as \"%s\". Tap delay: %dms, key gap: %dms.",
-           _deviceName.c_str(), _tapDelay, _keyGap);
+    _logNf("Advertising as \"%s\". Appearance: 0x%04X. Tap delay: %dms, key gap: %dms.",
+           _deviceName.c_str(), _appearance,  _tapDelay, _keyGap);
 }
 
 // ─── end() ────────────────────────────────────────────────────────────────
@@ -763,6 +765,15 @@ void HijelHID_BLEKeyboard::setTxPower(uint8_t level) {
     } else {
         _logNf("TX power level %d stored — will be applied in begin().", level);
     }
+}
+
+// ─── Appearance (GAP Advertisement) ───────────────────────────────────────
+
+void HijelHID_BLEKeyboard::setAppearance(uint16_t appearance) {
+    if (_state == _BLEState::Running) {
+        _logN("WARNING: setAppearance() called after begin() — will take effect on next begin() cycle.");
+    }
+    _appearance = appearance;
 }
 
 // ─── Idle Power Management — Internal Helpers ─────────────────────────────
