@@ -417,6 +417,34 @@ The full table (`BLEHIDAppearance.h`) covers every category and subcategory defi
 > [!NOTE]
 > Hosts cache the appearance value from the first successful pairing. To change the icon/type shown in the OS, unpair on the host side, call `keyboard.clearBonds()`, and re-pair.
 
+### Report Enable / Disable
+
+For devices that don't need both report types, either collection can be dropped from the HID descriptor. Both default to enabled.
+
+```.ino
+// Media remote — drops the keyboard collection, so the host
+// does not present a phantom keyboard alongside the media controls.
+remote.setKeyboardReportEnabled(false);
+remote.setAppearance(APPEARANCE_HID_PRESENTATION_REMOTE);
+remote.begin();
+
+// Pure keyboard — drops the consumer collection. MEDIA_* keys
+// become silent no-ops on this instance.
+keyboard.setConsumerReportEnabled(false);
+
+// Read back the current config
+if (keyboard.isKeyboardReportEnabled() && keyboard.isConsumerReportEnabled()) {
+    // both reports present — full keyboard + media
+}
+```
+
+| Flag | Default | What it controls | Affected APIs |
+|---|---|---|---|
+| `setKeyboardReportEnabled(bool)` | `true` | Report ID 0x01 — the input+output pair (keycodes + LEDs) | `press(KEY_*)`, `tap(KEY_*)`, `release(KEY_*)`, `print()`, `println()`, `write()`, `isCapsLockOn()`, `isNumLockOn()`, `isScrollLockOn()`, `onLEDChange()` |
+| `setConsumerReportEnabled(bool)` | `true` | Report ID 0x02 — input only (media usage IDs) | `press(MEDIA_*)`, `tap(MEDIA_*)`, `release(MEDIA_*)` |
+
+Disabled APIs become silent no-ops — no crash, no warning at the call site. Both flags must be set before begin() (or between end() and begin()). Setting both to false produces an empty HID descriptor: the device still advertises, but cannot send anything.
+
 [[Top]](#api-reference)
 
 ---

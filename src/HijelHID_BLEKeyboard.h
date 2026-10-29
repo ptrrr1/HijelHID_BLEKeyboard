@@ -384,6 +384,43 @@ public:
      */
     void setTxPower(uint8_t level);
 
+    // ─── Report Enable / Disable ─────────────────────────────────────────
+
+    /**
+     * Enable or disable the keyboard report (Report ID 0x01).
+     *
+     * The keyboard report is the bidirectional pair:
+     *   - Input  (device → host): 8-byte key report (modifiers + 6 keycodes)
+     *   - Output (host → device): 1-byte LED state (CapsLock, NumLock, ...)
+     *
+     * Default: `true` (enabled).
+     *
+     * Set to `false` for a device that only sends consumer/media keys —
+     * e.g. a media remote, presentation clicker, or volume knob — so the
+     * host does not present a phantom keyboard.
+     *
+     * Must be called before `begin()`. Calling after `begin()` logs a
+     * warning; the new value takes effect on the next `end()` + `begin()`
+     * cycle. If both reports are disabled, the HID descriptor will be
+     * empty and the device will advertise but report nothing.
+     */
+    void setKeyboardReportEnabled(bool enable);
+
+    /**
+     * Enable or disable the consumer report (Report ID 0x02).
+     *
+     * The consumer report is input-only (device → host): a single
+     * 16-bit `MEDIA_*` usage ID.
+     *
+     * Default: `true` (enabled).
+     *
+     * Set to `false` for a pure keyboard that never sends media keys.
+     *
+     * Must be called before `begin()`. Same restart rules as
+     * `setKeyboardReportEnabled()`.
+     */
+    void setConsumerReportEnabled(bool enable);
+
     // ─── Appearance (GAP Advertisement) ──────────────────────────────────
 
     /**
@@ -617,6 +654,13 @@ private:
     HIDLogLevel         _logLevel;
     bool                _useRandomAddress;  // if true, use random static address in begin()
 
+    // Enable flags for the two HID report collections.
+    // Both default true — the descriptor contains both the keyboard
+    // (input+output pair, Report ID 0x01) and consumer (input only,
+    // Report ID 0x02) collections, exactly as before this feature.
+    bool                _keyboardReportEnabled;
+    bool                _consumerReportEnabled;
+    
     // ── Constructor Validation Flags ──────────────────────────────────────
     // Set in the constructor when an argument is out of range. Warnings are
     // deferred to begin() so they print after Serial.begin() has been called.

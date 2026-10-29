@@ -22,22 +22,23 @@
 #include "HijelHID_BLEKeyboard.h"
 #include <stdarg.h>
 
-// ─── HID Report Descriptor ────────────────────────────────────────────────
+// ─── HID Report Descriptor (two optional collections) ────────────────────
 //
-// Two top-level collections:
-//   Report ID 0x01 — Standard keyboard (8-byte input + 1-byte LED output)
-//   Report ID 0x02 — Consumer Control  (2-byte 16-bit usage ID input)
+// The report map is assembled at begin() time from whichever of these two
+// collections is enabled (both default true):
 //
-// Keyboard report layout (8 bytes):
-//   Byte 0: Modifier bitmask  (Ctrl / Shift / Alt / GUI × Left / Right)
-//   Byte 1: Reserved (always 0x00)
-//   Bytes 2–7: Up to 6 simultaneous keycodes (6KRO)
+//   _hidKeyboardCollection  (Report ID 0x01) — bidirectional pair
+//       Input:  8-byte keyboard report — [modifiers][reserved][key0..key5]
+//       Output: 1-byte LED report      — NumLock / CapsLock / ScrollLock / ...
 //
-// Consumer report layout (2 bytes):
-//   16-bit usage ID, little-endian. 0x0000 = all released.
+//   _hidConsumerCollection  (Report ID 0x02) — input only
+//       Input:  2-byte consumer report — 16-bit usage ID, little-endian
+//
+// Splitting the map allows a device to drop the keyboard collection
+// (e.g. a media-only remote) or the consumer collection (a pure keyboard)
+// without any change to the report IDs of the other.
 
-static const uint8_t _hidReportDescriptor[] = {
-
+static const uint8_t _hidKeyboardCollection[] = {
     // ── Keyboard (Report ID 0x01) ──────────────────────────────────────
     0x05, 0x01,        // Usage Page (Generic Desktop)
     0x09, 0x06,        // Usage (Keyboard)
@@ -71,8 +72,6 @@ static const uint8_t _hidReportDescriptor[] = {
     0x91, 0x01,        //   Output (Constant) — padding to complete the byte
 
     // 6-key rollover keycode array
-    // Logical Maximum 0xE7 covers all standard keys including international
-    // and language keys up to KEY_RGUI.
     0x95, 0x06,        //   Report Count (6)
     0x75, 0x08,        //   Report Size (8 bits)
     0x15, 0x00,        //   Logical Minimum (0)
@@ -83,10 +82,10 @@ static const uint8_t _hidReportDescriptor[] = {
     0x81, 0x00,        //   Input (Data, Array, Absolute)
 
     0xC0,              // End Collection (Keyboard)
+};
 
+static const uint8_t _hidConsumerCollection[] = {
     // ── Consumer Control (Report ID 0x02) ─────────────────────────────
-    // Logical Maximum 0x3FF covers all MEDIA_* values defined in
-    // BLEHIDMediaKeys.h without any descriptor change.
     0x05, 0x0C,        // Usage Page (Consumer)
     0x09, 0x01,        // Usage (Consumer Control)
     0xA1, 0x01,        // Collection (Application)
@@ -272,6 +271,8 @@ HijelHID_BLEKeyboard::HijelHID_BLEKeyboard(const char* deviceName,
       _keyGap(HID_DEFAULT_KEY_GAP_MS),
       _logLevel(HIDLogLevel::Off),
       _useRandomAddress(false),
+      _keyboardReportEnabled(true),
+      _consumerReportEnabled(true),
       _state(_BLEState::Stopped),
       _connected(false),
       _authenticated(false),
@@ -490,13 +491,45 @@ void HijelHID_BLEKeyboard::begin() {
     _pHID->setPnp(0x01, 0x02E5, 0x0001, 0x0100);
     // HID info: country=0 (not localised), flags=0x01 (normally connectable)
     _pHID->setHidInfo(0x00, 0x01);
-    _pHID->setReportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
 
-    // Retrieve report characteristics by Report ID
+    // Assemble the report map from whichever collections are enabled.
+    // setReportMap() copies the buffer into NimBLE's internal storage, so a
+    // stack buffer is safe here — the pointer only needs to stay valid for
+    // the duration of the call.
+    uint8_t descBuf[sizeof(_hidKeyboardCollection) + sizeof(_hidConsumerCollection)];
+    size_t  descLen = 0;
+    if (_keyboardReportEnabled) {
+        memcpy(descBuf + descLen, _hidKeyboardCollection, sizeof(_hidKeyboardCollection));
+        descLen += sizeof(_hidKeyboardCollection);
+    }
+    if (_consumerReportEnabled) {
+        memcpy(descBuf + descLen, _hidConsumerCollection, sizeof(_hidConsumerCollection));
+        descLen += sizeof(_hidConsumerCollection);
+    }
+    if (descLen == 0) {
+        _logN("WARNING: Both keyboard and consumer reports are disabled — HID descriptor is empty. "
+              "The device will advertise but cannot send any reports.");
+    }
+    _logNf("Report map: %u bytes (keyboard=%s, consumer=%s).",
+           (unsigned)descLen,
+           _keyboardReportEnabled ? "on" : "off",
+           _consumerReportEnabled ? "on" : "off");
+    _pHID->setReportMap(descBuf, descLen);
+
+    // Retrieve report characteristics by Report ID. Disabled reports yield
+    // nullptr, which every _send*Report() helper already guards against —
+    // disabled paths become silent no-ops without further change.
     _logN("Getting report characteristics...");
-    _pKeyboardInput  = _pHID->getInputReport(HID_REPORT_ID_KEYBOARD);
-    _pKeyboardOutput = _pHID->getOutputReport(HID_REPORT_ID_KEYBOARD);
-    _pConsumerInput  = _pHID->getInputReport(HID_REPORT_ID_CONSUMER);
+    if (_keyboardReportEnabled) {
+        _pKeyboardInput  = _pHID->getInputReport(HID_REPORT_ID_KEYBOARD);
+        _pKeyboardOutput = _pHID->getOutputReport(HID_REPORT_ID_KEYBOARD);
+    } else {
+        _pKeyboardInput  = nullptr;
+        _pKeyboardOutput = nullptr;
+    }
+    _pConsumerInput = _consumerReportEnabled
+                    ? _pHID->getInputReport(HID_REPORT_ID_CONSUMER)
+                    : nullptr;
 
     // Register LED output callback if the characteristic was created
     if (_pKeyboardOutput != nullptr) {
@@ -765,6 +798,22 @@ void HijelHID_BLEKeyboard::setTxPower(uint8_t level) {
     } else {
         _logNf("TX power level %d stored — will be applied in begin().", level);
     }
+}
+
+// ─── Report Enable / Disable ─────────────────────────────────────────────
+
+void HijelHID_BLEKeyboard::setKeyboardReportEnabled(bool enable) {
+    if (_state == _BLEState::Running) {
+        _logN("WARNING: setKeyboardReportEnabled() called after begin() — will take effect on next begin() cycle.");
+    }
+    _keyboardReportEnabled = enable;
+}
+
+void HijelHID_BLEKeyboard::setConsumerReportEnabled(bool enable) {
+    if (_state == _BLEState::Running) {
+        _logN("WARNING: setConsumerReportEnabled() called after begin() — will take effect on next begin() cycle.");
+    }
+    _consumerReportEnabled = enable;
 }
 
 // ─── Appearance (GAP Advertisement) ───────────────────────────────────────
