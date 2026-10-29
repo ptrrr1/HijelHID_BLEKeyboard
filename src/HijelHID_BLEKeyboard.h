@@ -400,8 +400,7 @@ public:
      * host does not present a phantom keyboard.
      *
      * Must be called before `begin()`. Calling after `begin()` logs a
-     * warning; the new value takes effect on the next `end()` + `begin()`
-     * cycle. If both reports are disabled, the HID descriptor will be
+     * warning; If both reports are disabled, the HID descriptor will be
      * empty and the device will advertise but report nothing.
      */
     void setKeyboardReportEnabled(bool enable);
@@ -416,8 +415,7 @@ public:
      *
      * Set to `false` for a pure keyboard that never sends media keys.
      *
-     * Must be called before `begin()`. Same restart rules as
-     * `setKeyboardReportEnabled()`.
+     * Must be called before `begin()`.
      */
     void setConsumerReportEnabled(bool enable);
 

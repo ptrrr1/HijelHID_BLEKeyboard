@@ -401,6 +401,10 @@ void HijelHID_BLEKeyboard::begin() {
         _logN("ERROR: begin() called after kill() — BLE stack is permanently shut down.");
         return;
     }
+    if (!_keyboardReportEnabled && !_consumerReportEnabled) {
+        _logN("ERROR: Keyboard and Consumer Reports are disabled, nothing to send.");
+        return;
+    }
 
     // Print any deferred constructor warnings now that Serial is running
     if (_nameTruncated) {
@@ -815,15 +819,17 @@ void HijelHID_BLEKeyboard::setTxPower(uint8_t level) {
 // ─── Report Enable / Disable ─────────────────────────────────────────────
 
 void HijelHID_BLEKeyboard::setKeyboardReportEnabled(bool enable) {
-    if (_state == _BLEState::Running) {
-        _logN("WARNING: setKeyboardReportEnabled() called after begin() — will take effect on next begin() cycle.");
+    if (_pHID != nullptr) {
+        _logN("WARNING: setKeyboardReportEnabled() called after begin() has no effect.");
+        return;
     }
     _keyboardReportEnabled = enable;
 }
 
 void HijelHID_BLEKeyboard::setConsumerReportEnabled(bool enable) {
-    if (_state == _BLEState::Running) {
-        _logN("WARNING: setConsumerReportEnabled() called after begin() — will take effect on next begin() cycle.");
+    if (_pHID != nullptr) {
+        _logN("WARNING: setConsumerReportEnabled() called after begin() has no effect.");
+        return;
     }
     _consumerReportEnabled = enable;
 }
